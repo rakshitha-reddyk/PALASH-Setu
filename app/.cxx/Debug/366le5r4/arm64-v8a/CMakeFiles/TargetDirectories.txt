@@ -1,0 +1,3 @@
+C:/Users/kraks/Desktop/palash-setu/app/.cxx/Debug/366le5r4/arm64-v8a/CMakeFiles/palash_native.dir
+C:/Users/kraks/Desktop/palash-setu/app/.cxx/Debug/366le5r4/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/kraks/Desktop/palash-setu/app/.cxx/Debug/366le5r4/arm64-v8a/CMakeFiles/rebuild_cache.dir

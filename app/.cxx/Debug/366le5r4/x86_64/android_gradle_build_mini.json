@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "C:\\Users\\kraks\\Desktop\\palash-setu\\app\\src\\main\\cpp\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\kraks\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "C:\\Users\\kraks\\Desktop\\palash-setu\\app\\.cxx\\Debug\\366le5r4\\x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\kraks\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "C:\\Users\\kraks\\Desktop\\palash-setu\\app\\.cxx\\Debug\\366le5r4\\x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "palash_native::@6890427a1f51a3e7e1df": {
+      "artifactName": "palash_native",
+      "abi": "x86_64",
+      "output": "C:\\Users\\kraks\\Desktop\\palash-setu\\app\\build\\intermediates\\cxx\\Debug\\366le5r4\\obj\\x86_64\\libpalash_native.so",
+      "runtimeFiles": []
+    }
+  }
+}
