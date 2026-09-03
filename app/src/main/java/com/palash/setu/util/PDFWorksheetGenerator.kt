@@ -3,6 +3,7 @@ package com.palash.setu.util
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -19,17 +20,19 @@ class PDFWorksheetGenerator(
     suspend fun generate(
         userId: String,
         targetLanguage: String,
-        competency: String,
-        template: WorksheetTemplate
+        template: WorksheetTemplateConfig
     ): File {
         val document = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
         val page = document.startPage(pageInfo)
-        drawPage(page.canvas, targetLanguage, competency, template)
+        
+        drawHeader(page.canvas, template)
+        drawContent(page.canvas, targetLanguage, template)
+        
         document.finishPage(page)
 
-        val directory = File(context.filesDir, "worksheets").apply { mkdirs() }
-        val file = File(directory, "worksheet_${UUID.randomUUID()}.pdf")
+        val directory = File(context.cacheDir, "worksheets").apply { mkdirs() }
+        val file = File(directory, "PALASH_${template.id}_${UUID.randomUUID().toString().take(6)}.pdf")
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
 
@@ -37,97 +40,133 @@ class PDFWorksheetGenerator(
             GeneratedWorksheet(
                 id = UUID.randomUUID().toString(),
                 userId = userId,
-                title = "$competency - ${template.label}",
+                title = template.title,
                 targetLanguage = targetLanguage,
-                nipunCompetencyCode = competency,
+                nipunCompetencyCode = template.nipunTag,
                 pdfLocalFilePath = file.absolutePath
             )
         )
         return file
     }
 
-    private fun drawPage(canvas: Canvas, language: String, competency: String, template: WorksheetTemplate) {
-        val heading = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 70, 120); textSize = 30f; typeface = Typeface.DEFAULT_BOLD }
-        val body = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.DKGRAY; textSize = 20f }
-        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.LTGRAY; style = Paint.Style.STROKE; strokeWidth = 2f }
-        
-        val scriptPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 26f; typeface = Typeface.DEFAULT_BOLD }
-        val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 100, 0); textSize = 44f; typeface = Typeface.DEFAULT_BOLD }
-        val shapePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 87, 34); style = Paint.Style.FILL }
+    private fun drawHeader(canvas: Canvas, config: WorksheetTemplateConfig) {
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+            color = Color.rgb(0, 102, 204)
+            textSize = 24f
+            typeface = Typeface.DEFAULT_BOLD 
+        }
+        val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+            color = Color.DKGRAY
+            textSize = 14f 
+        }
+        val tagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+            color = Color.rgb(0, 135, 90)
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+        }
 
-        canvas.drawText("PALASH-Setu", 60f, 70f, heading)
-        canvas.drawText(competency, 60f, 115f, body)
-        canvas.drawText("Hindi  |  $language", 60f, 150f, body)
-        canvas.drawLine(60f, 175f, PAGE_WIDTH - 60f, 175f, line)
+        canvas.drawText("PALASH MTB-MLE Bilingual Worksheet", 50f, 50f, titlePaint)
+        canvas.drawText("School: __________________________  Date: __________", 50f, 80f, subPaint)
+        canvas.drawText("Competency: ${config.title} [${config.nipunTag}]", 50f, 105f, tagPaint)
+        canvas.drawLine(50f, 120f, PAGE_WIDTH - 50f, 120f, Paint().apply { strokeWidth = 1f; color = Color.LTGRAY })
+    }
 
-        if (template == WorksheetTemplate.WORKSHEET) {
-            val counts = listOf(3, 2, 5, 1, 4)
-            val olChiki = listOf("ᱯᱮ", "ᱵᱟᱨ", "ᱢᱚᱬᱮ", "ᱢᱤᱫ", "ᱯᱩᱱ")
-            val hindiPrompt = "गिनें:"
-            val nativePrompt = "ᱞᱮᱠᱷᱟᱭ ᱯᱮ:"
-            
-            for (index in 0 until 5) {
-                val count = counts[index]
-                val top = 215f + index * 120f
-                val boxWidth = 180f
-                val boxHeight = 90f
-                
-                // Draw Question Box
-                canvas.drawRect(60f, top, 60f + boxWidth, top + boxHeight, line)
-                
-                // Draw Visual Items in Box (Circles or Squares)
-                val itemSize = 10f
-                val spacing = 30f
-                for (s in 0 until count) {
-                    val sCol = s % 5
-                    val sRow = s / 5
-                    val x = 90f + sCol * spacing
-                    val y = top + 30f + sRow * spacing
-                    if (index % 2 == 0) {
-                        canvas.drawCircle(x, y, itemSize, shapePaint)
-                    } else {
-                        canvas.drawRect(x - itemSize, y - itemSize, x + itemSize, y + itemSize, shapePaint)
+    private fun drawContent(canvas: Canvas, language: String, config: WorksheetTemplateConfig) {
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 18f; color = Color.BLACK }
+        val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 14f; color = Color.GRAY }
+        val nativePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 22f; color = Color.rgb(0, 70, 120); typeface = Typeface.DEFAULT_BOLD }
+        val shapePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(217, 56, 30); style = Paint.Style.STROKE; strokeWidth = 2f }
+        val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(150, 150, 150)
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f
+            pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
+        }
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 235, 230); style = Paint.Style.FILL }
+
+        when (config.id) {
+            "counting" -> {
+                val items = listOf("एक", "दो", "तीन", "चार", "पाँच")
+                val native = listOf("᱑ (Mid)", "᱒ (Bar)", "３ (Pe)", "４ (Pun)", "᱕ (Mone)")
+                for (i in 0 until 5) {
+                    val top = 160f + (i * 125f)
+                    canvas.drawRect(60f, top, 180f, top + 90f, fillPaint)
+                    canvas.drawRect(60f, top, 180f, top + 90f, shapePaint)
+                    
+                    for (c in 0..i) {
+                        canvas.drawCircle(85f + (c % 3 * 25f), top + 30f + (c / 3 * 30f), 8f, Paint().apply { color = Color.RED; style = Paint.Style.FILL })
                     }
-                }
 
-                // Render Hindi & Native Prompts
-                canvas.drawText("$hindiPrompt $nativePrompt", 260f, top + 35f, body)
-                
-                // Draw Blank Fill-in Line and Answer Hint
-                canvas.drawText("_______ ( ${olChiki[index]} / $count )", 260f, top + 75f, body)
-                
-                // Decorative row separator
-                canvas.drawLine(60f, top + boxHeight + 15f, PAGE_WIDTH - 60f, top + boxHeight + 15f, line)
+                    canvas.drawText("${items[i]} / ${native[i]}", 210f, top + 35f, bodyPaint)
+                    canvas.drawText("Count: ________________", 210f, top + 75f, bodyPaint)
+                    canvas.drawLine(50f, top + 105f, PAGE_WIDTH - 50f, top + 105f, Paint().apply { color = Color.LTGRAY; strokeWidth = 0.5f })
+                }
             }
-        } else {
-            val olChikiNumbers = listOf("ᱢᱤᱫ", "ᱵᱟᱨ", "ᱯᱮ", "ᱯᱩᱱ", "ᱢᱚᱬᱮ", "ᱛᱩᱨᱩᱭ")
-            val hindiTrans = listOf("मिड", "बार", "पे", "पुन", "मोणे", "तुरुय")
-            
-            for (index in 0 until 6) {
-                val column = index % 2
-                val row = index / 2
-                val left = 60f + column * 270f
-                val top = 215f + row * 190f
+            "fruits" -> {
+                val hindi = listOf("सेब", "केला", "आम", "अमरूद")
+                val native = listOf("ᱥᱮᱣ", "ᱠᱟᱭᱨᱟ", "ᱩᱞ", "ᱛᱟᱢᱨᱚᱥ")
+                val phonetic = listOf("Sew", "Kaira", "Ul", "Tamros")
                 
-                // Draw Card Box
-                canvas.drawRect(left, top, left + 250f, top + 160f, line)
+                for (i in 0 until 4) {
+                    val top = 160f + (i * 155f)
+                    
+                    // Row Box
+                    canvas.drawRect(50f, top, PAGE_WIDTH - 50f, top + 130f, dashPaint)
+                    
+                    // Hindi Term
+                    canvas.drawText("Hindi:", 70f, top + 40f, smallPaint)
+                    canvas.drawText(hindi[i], 70f, top + 75f, bodyPaint.apply { textSize = 24f })
+                    
+                    // Native Script
+                    canvas.drawText("Santhali ($language):", 250f, top + 40f, smallPaint)
+                    canvas.drawText(native[i], 250f, top + 80f, nativePaint.apply { textSize = 32f })
+                    canvas.drawText("(${phonetic[i]})", 250f, top + 110f, smallPaint)
+                    
+                    // Activity
+                    canvas.drawText("Activity: Trace the word below", 70f, top + 115f, smallPaint)
+                    canvas.drawLine(70f, top + 125f, 200f, top + 125f, dashPaint)
+                }
+            }
+            "tracing" -> {
+                val letters = listOf("ᱚ", "ᱛ", "ᱜ", "ᱝ", "ᱞ", "ᱟ")
+                for (i in 0 until letters.size) {
+                    val top = 160f + (i * 105f)
+                    canvas.drawText(letters[i], 70f, top + 55f, nativePaint.apply { textSize = 45f })
+                    canvas.drawText("Trace -->  . . . . . . . . . . . . . .", 160f, top + 45f, Paint().apply { color = Color.LTGRAY; textSize = 25f })
+                    canvas.drawLine(160f, top + 65f, PAGE_WIDTH - 60f, top + 65f, dashPaint)
+                }
+            }
+            "actions" -> {
+                val actions = listOf(
+                    "बैठो" to "ᱫᱩᱲᱩᱵ (Durub)",
+                    "किताब खोलो" to "ᱯᱩᱛᱷᱤ ᱡᱷᱤᱡᱽ ᱢᱮ (Puthi jhij me)",
+                    "सुनो" to "ᱟᱸᱡᱚᱢ ᱢᱮ (Anjom me)",
+                    "लिखो" to "ᱚᱞ ᱢᱮ (Ol me)"
+                )
                 
-                // Render Number (1-6)
-                canvas.drawText("${index + 1}", left + 20f, top + 55f, numberPaint)
-                
-                // Render Native Script (Ol Chiki)
-                canvas.drawText(olChikiNumbers[index], left + 80f, top + 50f, scriptPaint)
-                
-                // Render Hindi Transliteration
-                canvas.drawText(hindiTrans[index], left + 80f, top + 85f, body)
-                
-                // Draw Count Shapes (Stars/Dots)
-                val dotRadius = 7f
-                val spacing = 22f
-                for (s in 0..index) {
-                    val sColumn = s % 5
-                    val sRow = s / 5
-                    canvas.drawCircle(left + 25f + sColumn * spacing, top + 115f + sRow * spacing, dotRadius, shapePaint)
+                for (i in 0 until 4) {
+                    val row = i / 2
+                    val col = i % 2
+                    val left = 50f + (col * 255f)
+                    val top = 160f + (row * 300f)
+                    val cardWidth = 240f
+                    val cardHeight = 280f
+                    
+                    // Flashcard Box with Dash border for cutting
+                    canvas.drawRect(left, top, left + cardWidth, top + cardHeight, dashPaint)
+                    
+                    // Content
+                    canvas.drawText("Hindi:", left + 20f, top + 40f, smallPaint)
+                    canvas.drawText(actions[i].first, left + 20f, top + 80f, bodyPaint.apply { textSize = 22f; typeface = Typeface.DEFAULT_BOLD })
+                    
+                    canvas.drawLine(left + 20f, top + 110f, left + cardWidth - 20f, top + 110f, Paint().apply { color = Color.LTGRAY })
+                    
+                    canvas.drawText("Santhali:", left + 20f, top + 150f, smallPaint)
+                    val scriptPart = actions[i].second.substringBefore(" (")
+                    val phoneticPart = "(${actions[i].second.substringAfter(" (")}"
+                    
+                    canvas.drawText(scriptPart, left + 20f, top + 200f, nativePaint.apply { textSize = 28f })
+                    canvas.drawText(phoneticPart, left + 20f, top + 240f, bodyPaint.apply { textSize = 16f; color = Color.DKGRAY })
                 }
             }
         }
@@ -139,7 +178,9 @@ class PDFWorksheetGenerator(
     }
 }
 
-enum class WorksheetTemplate(val label: String) {
-    WORKSHEET("Worksheet"),
-    FLASHCARDS("Visual Flashcard Set")
-}
+data class WorksheetTemplateConfig(
+    val id: String,
+    val title: String,
+    val nipunTag: String,
+    val description: String
+)
