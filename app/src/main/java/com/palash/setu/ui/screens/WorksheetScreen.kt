@@ -2,8 +2,6 @@ package com.palash.setu.ui.screens
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -36,15 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.palash.setu.data.dao.GeneratedWorksheetDao
 import com.palash.setu.ui.theme.PalashBlue
 import com.palash.setu.ui.theme.PalashGreen
 import com.palash.setu.ui.theme.PalashMist
 import com.palash.setu.util.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,8 +48,8 @@ fun WorksheetScreen(userId: String, targetLanguage: String, worksheetDao: Genera
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isGenerating by remember { mutableStateOf(false) }
+    
+    val viewModel: WorksheetViewModel = viewModel()
 
     val templates = listOf(
         WorksheetTemplateConfig("counting", "Animal Counting (1-10)", "FLN Math L1", "Grade 1 Foundational Numeracy counting objects."),
@@ -92,106 +88,81 @@ fun WorksheetScreen(userId: String, targetLanguage: String, worksheetDao: Genera
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(templates) { template ->
-                    TemplateCard(template, isGenerating) {
-                        scope.launch {
-                            isGenerating = true
-                            val snackbarJob = launch {
-                                snackbarHostState.showSnackbar("Generating Bilingual PDF for ${template.title}...")
-                            }
-                            
-                            val startTime = System.currentTimeMillis()
-                            
-                            val pdfFile = withContext(Dispatchers.IO) {
-                                PDFWorksheetGenerator(context, worksheetDao).generate(userId, targetLanguage, template)
-                            }
-
-                            val bitmap = withContext(Dispatchers.IO) {
-                                renderPdfToBitmap(pdfFile)
-                            }
-                            
-                            snackbarJob.cancel()
-                            isGenerating = false
-                            val duration = (System.currentTimeMillis() - startTime) / 1000.0
-                            Toast.makeText(context, "Worksheet Created in ${String.format("%.1fs", duration)}", Toast.LENGTH_SHORT).show()
-                            
-                            previewBitmap = bitmap
-                        }
-                    }
-                }
-            }
-        }
-
-        previewBitmap?.let { bitmap ->
-            Dialog(
-                onDismissRequest = { previewBitmap = null },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        TopAppBar(
-                            title = { Text("Worksheet Preview", style = MaterialTheme.typography.titleMedium) },
-                            navigationIcon = {
-                                IconButton(onClick = { previewBitmap = null }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close")
-                                }
-                            },
-                            actions = {
-                                IconButton(onClick = { /* Print logic would go here */ }) {
-                                    Icon(Icons.Default.Print, contentDescription = "Print")
+                    val isCurrentGenerating = viewModel.generatingWorksheetId == template.id
+                    
+                    TemplateCard(template, isCurrentGenerating) {
+                        viewModel.generateWorksheet(
+                            context = context,
+                            userId = userId,
+                            targetLanguage = targetLanguage,
+                            worksheetDao = worksheetDao,
+                            template = template,
+                            onComplete = { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
                                 }
                             }
                         )
-                        
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .background(Color.LightGray)
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
+                    }
+                }
+            }
+        }
+
+        // Isolated Preview Dialog Trigger
+        viewModel.previewPdfFile?.let { pdfFile ->
+            val bitmap = viewModel.previewBitmap
+            if (bitmap != null) {
+                Dialog(
+                    onDismissRequest = { viewModel.closePreview() },
+                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            TopAppBar(
+                                title = { Text("Worksheet Preview", style = MaterialTheme.typography.titleMedium) },
+                                navigationIcon = {
+                                    IconButton(onClick = { viewModel.closePreview() }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Close")
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = { /* Print logic would go here */ }) {
+                                        Icon(Icons.Default.Print, contentDescription = "Print")
+                                    }
+                                }
+                            )
+                            
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxHeight()
-                                    .verticalScroll(rememberScrollState())
-                                    .background(Color.White)
-                                    .padding(8.dp)
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .background(Color.LightGray)
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "PDF Preview",
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentScale = ContentScale.FillWidth
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .verticalScroll(rememberScrollState())
+                                        .background(Color.White)
+                                        .padding(8.dp)
+                                ) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "PDF Preview",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentScale = ContentScale.FillWidth
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
-
-private fun renderPdfToBitmap(file: File): Bitmap? {
-    return try {
-        val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        val renderer = PdfRenderer(fileDescriptor)
-        val page = renderer.openPage(0)
-        
-        // High resolution for clear text
-        val bitmap = Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888)
-        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        
-        page.close()
-        renderer.close()
-        fileDescriptor.close()
-        bitmap
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 }
 

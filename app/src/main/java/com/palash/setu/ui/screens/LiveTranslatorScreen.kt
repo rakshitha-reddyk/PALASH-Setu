@@ -1,9 +1,10 @@
 package com.palash.setu.ui.screens
 
-import android.Manifest
+import android.app.Activity.RESULT_OK
 import android.content.Context
-import android.content.pm.PackageManager
+import android.content.Intent
 import android.media.MediaPlayer
+import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,11 +26,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import com.palash.setu.data.dao.FLNDictionaryDao
 import com.palash.setu.ui.theme.*
 import com.palash.setu.util.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,10 +42,10 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
 
     val tts = remember { TranslationTTS(context) }
     val engine = remember(dictionaryDao) { MockAudioTranslatorEngine(dictionaryDao) }
+    val viewModel = remember { TranslatorViewModel(engine) }
+    val uiState by viewModel.uiState.collectAsState()
 
-    var isRecording by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<TranslationResult?>(null) }
     var currentMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
     // Language Selection
@@ -57,6 +56,16 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
         selectedLangName.contains("Santhali") -> "Santhali"
         selectedLangName.contains("Ho") -> "Ho"
         else -> "Mundari"
+    }
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        viewModel.stopRecording()
+        if (result.resultCode == RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            viewModel.onHindiVoiceInput(spokenText, currentLangCode)
+        }
     }
 
     fun stopAllAudio() {
@@ -106,69 +115,23 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
         }
     }
 
-    fun runSimulation() {
-        scope.launch {
-            isRecording = true
-            stopAllAudio()
-            delay(1500)
-            isRecording = false
-            val simulatedPhrases = listOf("किताब", "नमस्ते", "बैठो", "एक", "दो", "लिखो", "पढ़ो")
-            val text = simulatedPhrases.random()
-            val translation = engine.translate(text, currentLangCode)
-            Log.d("LiveTranslator", "Simulated speech text: '$text', target translation: '${translation.nativeText}'")
-            result = translation
-            val audioRes = getAudioResource(context, text)
+    // Auto-play audio when translation result updates
+    LaunchedEffect(uiState.result) {
+        uiState.result?.let { translation ->
+            val audioRes = getAudioResource(context, translation.sourceHindi)
             playAudio(audioRes, translation.devanagariText)
         }
-    }
-
-    val voiceRecognizer = remember(currentLangCode) {
-        VoiceRecognizer(
-            context = context,
-            onResult = { text ->
-                scope.launch {
-                    isRecording = false
-                    stopAllAudio()
-                    val translation = engine.translate(text, currentLangCode)
-                    Log.d("LiveTranslator", "Received speech text: '$text', target translation: '${translation.nativeText}'")
-                    result = translation
-                    val audioRes = getAudioResource(context, text)
-                    playAudio(audioRes, translation.devanagariText)
-                }
-            },
-            onError = { err ->
-                Log.e("LiveTranslator", "Voice Error code: $err. Triggering fallback simulation.")
-                isRecording = false
-                runSimulation()
-            },
-            onEndOfSpeech = {
-                isRecording = false
-            }
-        )
     }
 
     DisposableEffect(Unit) {
         onDispose {
             tts.shutdown()
-            voiceRecognizer.stopListening()
             currentMediaPlayer?.release()
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            isRecording = true
-            try {
-                voiceRecognizer.startListening()
-            } catch (e: Exception) {
-                isRecording = false
-            }
-        } else {
-            isRecording = false
-        }
-    }
+    val isRecording = uiState.isRecording
+    val result = uiState.result
 
     val pulse by rememberInfiniteTransition(label = "mic-pulse").animateFloat(
         initialValue = 1f, targetValue = 1.08f,
@@ -235,7 +198,7 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                 // Hindi Input Section
                 Text("Hindi Input (Spoken)", style = labelStyle)
                 Text(
-                    result?.sourceHindi ?: "Tap mic and speak in Hindi...",
+                    if (uiState.hindiInput.isNotEmpty()) uiState.hindiInput else "Tap mic and speak in Hindi...",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
@@ -247,15 +210,15 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                     Column(Modifier.weight(1f)) {
                         Text("Classroom Translation ($currentLangCode)", style = labelStyle)
                         Text(
-                            result?.nativeText ?: "Native translation will appear here...",
+                            if (uiState.santhaliScript.isNotEmpty()) uiState.santhaliScript else "Native translation will appear here...",
                             style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp),
                             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                         )
                     }
                     if (result != null) {
                         IconButton(onClick = {
-                            val audioRes = getAudioResource(context, result!!.sourceHindi)
-                            playAudio(audioRes, result!!.devanagariText)
+                            val audioRes = getAudioResource(context, uiState.hindiInput)
+                            playAudio(audioRes, uiState.santhaliPhonetic)
                         }) {
                             Icon(Icons.Default.VolumeUp, contentDescription = "Play Audio", tint = PalashBlue)
                         }
@@ -265,7 +228,7 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                 // Phonetic Guide Section
                 Text("Phonetic Pronunciation Guide", style = labelStyle.copy(fontSize = 12.sp))
                 Text(
-                    result?.devanagariText ?: "Pronunciation guide will appear here",
+                    if (uiState.santhaliPhonetic.isNotEmpty()) uiState.santhaliPhonetic else "Pronunciation guide will appear here",
                     style = MaterialTheme.typography.bodyLarge,
                     color = PalashBlue,
                     modifier = Modifier.padding(top = 2.dp)
@@ -284,27 +247,18 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Button(
                 onClick = {
-                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                    Log.d("LiveTranslator", "Mic clicked. Permission granted: $hasPermission")
-
-                    if (isRecording) {
-                        isRecording = false
-                        voiceRecognizer.stopListening()
-                        return@Button
-                    }
-
                     stopAllAudio()
-
-                    if (hasPermission) {
-                        isRecording = true
-                        try {
-                            voiceRecognizer.startListening()
-                        } catch (e: Exception) {
-                            Log.e("LiveTranslator", "Mic start failed: ${e.message}. Triggering fallback.")
-                            runSimulation()
+                    try {
+                        viewModel.startRecording()
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Listening... Speak in Hindi")
                         }
-                    } else {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        speechLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        viewModel.stopRecording()
+                        Log.e("LiveTranslator", "Speech Intent failed: ${e.message}")
                     }
                 },
                 modifier = Modifier.size(116.dp).scale(if (isRecording) pulse else 1f),

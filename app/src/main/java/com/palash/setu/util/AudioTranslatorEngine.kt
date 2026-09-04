@@ -1,6 +1,7 @@
 package com.palash.setu.util
 
 import com.palash.setu.data.dao.FLNDictionaryDao
+import com.palash.setu.data.entity.FLNDictionary
 import kotlinx.coroutines.delay
 
 interface AudioTranslatorEngine {
@@ -20,22 +21,34 @@ class MockAudioTranslatorEngine(
 ) : AudioTranslatorEngine {
     override suspend fun translate(hindiText: String, targetLanguage: String): TranslationResult {
         val normalizedText = hindiText.trim()
+        
+        // 1. Try Exact Match
         val exactMatch = dictionaryDao.findExact(normalizedText)
         if (exactMatch != null) {
-            return when (targetLanguage) {
-                "Ho" -> TranslationResult(normalizedText, exactMatch.hoWarangChiti, exactMatch.hoDevanagari, 5, true)
-                "Mundari" -> TranslationResult(normalizedText, exactMatch.mundariDevanagari, exactMatch.mundariDevanagari, 5, true)
-                else -> TranslationResult(normalizedText, exactMatch.santhaliOlChiki, exactMatch.santhaliDevanagari, 5, true)
-            }
+            return mapResult(normalizedText, exactMatch, targetLanguage)
         }
 
-        delay(1_500)
+        // 2. Try Partial Match (e.g., if user says "एक किताब" and we have "किताब")
+        val partialMatches = dictionaryDao.findPartial("%$normalizedText%")
+        if (partialMatches.isNotEmpty()) {
+            return mapResult(normalizedText, partialMatches.first(), targetLanguage)
+        }
+
+        // 3. Fallback for "No Match Found"
         return TranslationResult(
             sourceHindi = normalizedText,
-            nativeText = "अनुवाद उपलब्ध होगा",
-            devanagariText = "अनुवाद उपलब्ध होगा",
-            processingLatencyMs = 1_500,
+            nativeText = "[No Match Found]",
+            devanagariText = normalizedText,
+            processingLatencyMs = 100,
             isDictionaryExactMatch = false
         )
+    }
+
+    private fun mapResult(source: String, match: FLNDictionary, target: String): TranslationResult {
+        return when (target) {
+            "Ho" -> TranslationResult(source, match.hoWarangChiti, match.hoDevanagari, 5, true)
+            "Mundari" -> TranslationResult(source, match.mundariDevanagari, match.mundariDevanagari, 5, true)
+            else -> TranslationResult(source, match.santhaliOlChiki, match.santhaliDevanagari, 5, true)
+        }
     }
 }

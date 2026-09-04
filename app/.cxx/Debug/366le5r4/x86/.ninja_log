@@ -1,3 +1,6 @@
 # ninja log v5
 0	1412	8100781786535197	CMakeFiles/palash_native.dir/native-lib.cpp.o	1d2becdc52fd328d
 1431	1689	8100781789413531	C:/Users/kraks/Desktop/palash-setu/app/build/intermediates/cxx/Debug/366le5r4/obj/x86/libpalash_native.so	6a475be537546ed
+0	13	0	clean	304550ecbe7efa81
+3	751	8102468131420977	CMakeFiles/palash_native.dir/native-lib.cpp.o	1d2becdc52fd328d
+752	847	8102468132385397	C:/Users/kraks/Desktop/palash-setu/app/build/intermediates/cxx/Debug/366le5r4/obj/x86/libpalash_native.so	6a475be537546ed
