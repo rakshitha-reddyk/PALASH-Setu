@@ -27,7 +27,10 @@ class TranslatorViewModel(
 
     fun onHindiVoiceInput(spokenText: String?, currentLangCode: String) {
         if (spokenText.isNullOrBlank()) {
-            _uiState.value = _uiState.value.copy(isRecording = false)
+            _uiState.value = _uiState.value.copy(
+                isRecording = false,
+                error = "Offline speech failed. Please ensure Hindi language pack is downloaded in Android Settings (Settings -> Google -> Voice -> Offline Speech Recognition)"
+            )
             return
         }
 

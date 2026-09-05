@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.palash.setu.data.dao.FLNDictionaryDao
@@ -253,7 +254,8 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Listening... Speak in Hindi")
+                            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // FORCES OFFLINE SPEECH ENGINE
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Listening (Offline Mode)... Speak in Hindi")
                         }
                         speechLauncher.launch(intent)
                     } catch (e: Exception) {
@@ -273,6 +275,16 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
             Modifier.align(Alignment.CenterHorizontally),
             style = MaterialTheme.typography.bodyMedium
         )
+
+        uiState.error?.let { 
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+            )
+        }
     }
 }
 
