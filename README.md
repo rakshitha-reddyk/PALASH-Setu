@@ -12,7 +12,7 @@ By unifying real-time voice translation, mother-tongue-based Foundational Litera
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **🎙️ Real-Time Voice & Text Translation:** Converts Hindi teacher speech/text into native tribal language text and speech output with a target latency of $\le 3$ seconds.
 * **📚 Vernacular FLN Pedagogy:** Delivers bilingual lesson scripts, local vocabulary guides, interactive soundboards, and Ol Chiki phonics.
@@ -33,11 +33,11 @@ Designed with a modular architecture to scale across multiple tribal languages:
 
 ## 🧰 Tech Stack
 
-• Platform & Language: Android Native, Kotlin
-• UI & Architecture: Jetpack Compose, Material 3, MVVM + StateFlow
-• Database & Security: Room (SQLite), EncryptedSharedPreferences
-• Speech & Audio: Native RecognizerIntent, TextToSpeech, MediaPlayer
-• Build Tools: Gradle
+• Platform & Language: Android Native, Kotlin          
+• UI & Architecture: Jetpack Compose, Material 3, MVVM + StateFlow             
+• Database & Security: Room (SQLite), EncryptedSharedPreferences         
+• Speech & Audio: Native RecognizerIntent, TextToSpeech, MediaPlayer         
+• Build Tools: Gradle        
 
 ---
 
@@ -59,7 +59,7 @@ PALASH-Setu/
 
 ---
 
-⚡ Quick Start & Installation
+Quick Start & Installation
 
 ### Prerequisites
 * Android Studio (Hedgehog | 2023.1.1 or higher)
@@ -91,7 +91,7 @@ Click Run (Shift + F10) to compile and deploy the APK directly to the device.
 
 ---
 
-🎯 Policy Alignment & Impact
+Policy Alignment & Impact
 
 * **NIPUN Bharat Mission:** Direct alignment with foundational literacy goals across primary schools.
 * **National Education Policy (NEP 2020):** Supports Mother Tongue-Based Multilingual Education (MTB-MLE) in early learning.
