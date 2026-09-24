@@ -29,7 +29,7 @@ class TranslatorViewModel(
         if (spokenText.isNullOrBlank()) {
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
-                error = "Offline speech failed. Please ensure Hindi language pack is downloaded in Android Settings (Settings -> Google -> Voice -> Offline Speech Recognition)"
+                error = "Didn't catch that — try again, or type the Hindi text below."
             )
             return
         }
@@ -62,5 +62,9 @@ class TranslatorViewModel(
 
     fun setError(message: String) {
         _uiState.value = _uiState.value.copy(isRecording = false, error = message)
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
     }
 }

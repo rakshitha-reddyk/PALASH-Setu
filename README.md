@@ -6,7 +6,7 @@
 
 ## 📌 Project Overview
 
-**PALASH-Setu** is an offline-first, Android-based educational platform. It addresses the language barrier faced by non-native (e.g., Hindi-medium) teachers instructing primary school students in tribal regions. 
+**PALASH-Setu** is an offline-first, Android-based educational platform. It addresses the language barrier faced by non-native (e.g., Hindi-medium) teachers instructing primary school students in tribal regions.
 
 By unifying real-time voice translation, mother-tongue-based Foundational Literacy and Numeracy (FLN) pedagogy, interactive phonics (such as Ol Chiki script), and automatic bilingual worksheet creation, PALASH-Setu ensures no child is left behind due to language barriers.
 
@@ -33,11 +33,11 @@ Designed with a modular architecture to scale across multiple tribal languages:
 
 ## 🧰 Tech Stack
 
-• Platform & Language: Android Native, Kotlin                        
-• UI & Architecture: Jetpack Compose, Material 3, MVVM + StateFlow         
-• Database & Security: Room (SQLite), EncryptedSharedPreferences          
-• Speech & Audio: Native RecognizerIntent, TextToSpeech, MediaPlayer         
-• Native & Build Tools: C++ (Android NDK), CMake, Gradle          
+• Platform & Language: Android Native, Kotlin
+• UI & Architecture: Jetpack Compose, Material 3, MVVM + StateFlow
+• Database & Security: Room (SQLite), EncryptedSharedPreferences
+• Speech & Audio: Native RecognizerIntent, TextToSpeech, MediaPlayer
+• Build Tools: Gradle
 
 ---
 
@@ -48,12 +48,10 @@ PALASH-Setu/
 ├── app/
 │   ── src/
 │      ├── main/
-│      │   ├── cpp/            # Native C++/CMake compilation scripts
 │      │   ├── java/           # Core translation, database, and UI logic
 │      │   ├── res/            # Audio assets, layouts, and static FLN dictionaries
 │      │   └── AndroidManifest.xml
 │      └── build.gradle
-├── CMakeLists.txt
 ├── build.gradle
 └── README.md
 
@@ -66,7 +64,6 @@ PALASH-Setu/
 ### Prerequisites
 * Android Studio (Hedgehog | 2023.1.1 or higher)
 * Android SDK API Level 28 (Android 9.0 Pie) or higher
-* NDK & CMake (configured within Android Studio for native component compilation)
 
 ### Installation Steps
 
@@ -83,7 +80,7 @@ Navigate to and select the cloned PALASH-Setu directory.
 
 3. Build & Sync:
 
-Let Gradle sync dependencies and CMake resolve native C++ links.
+Let Gradle sync the project dependencies.
 
 Select a target emulator or connected physical Android device (min 2 GB RAM).
 

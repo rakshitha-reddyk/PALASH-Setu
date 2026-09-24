@@ -5,17 +5,26 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class LocalPreferences(context: Context) {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
     private val preferences = EncryptedSharedPreferences.create(
-        "palash_teacher_preferences",
-        MasterKey.DEFAULT_MASTER_KEY_ALIAS,
         context,
+        "palash_teacher_preferences",
+        masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
     val isOnboarded: Boolean get() = preferences.getBoolean(KEY_ONBOARDED, false)
+    val isVoicePackReady: Boolean get() = preferences.getBoolean(KEY_VOICE_PACK, false)
     val targetLanguage: String get() = preferences.getString(KEY_LANGUAGE, "Santhali") ?: "Santhali"
     val teacherId: String get() = preferences.getString(KEY_TEACHER_ID, "") ?: ""
+
+    fun setVoicePackReady(ready: Boolean) {
+        preferences.edit().putBoolean(KEY_VOICE_PACK, ready).apply()
+    }
 
     fun saveTeacherSetup(teacherId: String, district: String, block: String, language: String) {
         preferences.edit()
@@ -33,5 +42,6 @@ class LocalPreferences(context: Context) {
         private const val KEY_DISTRICT = "district"
         private const val KEY_BLOCK = "block"
         private const val KEY_LANGUAGE = "target_language"
+        private const val KEY_VOICE_PACK = "voice_pack_ready"
     }
 }

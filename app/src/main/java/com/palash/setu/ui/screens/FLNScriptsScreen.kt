@@ -12,8 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -224,7 +224,7 @@ private fun LessonPromptCard(prompt: LessonPrompt, onPlay: () -> Unit) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(prompt.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PalashBlue)
                 IconButton(onClick = onPlay) {
-                    Icon(Icons.Default.VolumeUp, contentDescription = "Listen", tint = PalashGreen)
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Listen", tint = PalashGreen)
                 }
             }
             Text(prompt.hindi, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -287,7 +287,7 @@ private fun ScriptTile(item: ScriptCardData, onClick: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(item.character, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = PalashBlue)
             Text("${item.name} (${item.phonetic})", fontSize = 10.sp, color = Color.DarkGray, textAlign = TextAlign.Center)
-            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = PalashGreen, modifier = Modifier.size(12.dp))
+            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = PalashGreen, modifier = Modifier.size(12.dp))
         }
     }
 }

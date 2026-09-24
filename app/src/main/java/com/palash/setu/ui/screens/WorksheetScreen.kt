@@ -13,9 +13,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -243,7 +243,7 @@ private fun TemplateCard(config: WorksheetTemplateConfig, isBusy: Boolean, onGen
 private val WorksheetTemplateConfig.iconVector: ImageVector
     get() = when (this.id) {
         "counting" -> Icons.Default.Numbers
-        "fruits" -> Icons.Default.MenuBook
+        "fruits" -> Icons.AutoMirrored.Filled.MenuBook
         "tracing" -> Icons.Default.Description
         else -> Icons.Default.RecordVoiceOver
     }
