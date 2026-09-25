@@ -2,14 +2,8 @@ package com.palash.setu.ui.screens
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
-import android.os.Build
-import android.os.Bundle
-import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,7 +34,6 @@ import androidx.core.content.ContextCompat
 import com.palash.setu.data.dao.FLNDictionaryDao
 import com.palash.setu.ui.theme.*
 import com.palash.setu.util.*
-import kotlinx.coroutines.delay
 
 private enum class VoiceModelState {
     Checking,
@@ -62,7 +55,6 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
     val engine = remember(dictionaryDao) { MockAudioTranslatorEngine(dictionaryDao) }
     val viewModel = remember { TranslatorViewModel(engine) }
     val uiState by viewModel.uiState.collectAsState()
-    val prefs = remember { LocalPreferences(context) }
 
     var isPlaying by remember { mutableStateOf(false) }
     var currentMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -81,16 +73,9 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
     var isTranslationInputFocused by remember { mutableStateOf(false) }
     var isTranslating by remember { mutableStateOf(false) }
     var amplitude by remember { mutableFloatStateOf(0f) }
-    var hindiPackMissing by remember { mutableStateOf(false) }
-    var packDownloading by remember { mutableStateOf(false) }
-    var voiceModelState by remember {
-        mutableStateOf(
-            if (prefs.isVoicePackReady) VoiceModelState.Ready else VoiceModelState.Checking
-        )
-    }
+    var voiceModelState by remember { mutableStateOf(VoiceModelState.Checking) }
+    var voiceStatusAcked by remember { mutableStateOf(false) }
     var downloadPercent by remember { mutableStateOf<Int?>(null) }
-    var voiceStatusAcked by remember { mutableStateOf(prefs.isVoicePackReady) }
-    var voiceAutoCheckFired by remember { mutableStateOf(prefs.isVoicePackReady) }
     val langCodeRef = rememberUpdatedState(currentLangCode)
 
     fun stopAllAudio() {
@@ -102,196 +87,64 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
     }
 
     val recognizer = remember {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            null
-        } else {
-            OnDeviceHindiStt.createRecognizer(context)?.apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {
-                        amplitude = (rmsdB / 10f).coerceIn(0f, 1f)
-                    }
-
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {
-                        isTranslating = true
-                    }
-
-                    override fun onError(error: Int) {
-                        amplitude = 0f
-                        isTranslating = false
-                        liveTranscript = ""
-                        hindiPackMissing = OnDeviceHindiStt.isHindiPackMissing(error)
-                        if (hindiPackMissing) {
-                            prefs.setVoicePackReady(false)
-                        }
-                        viewModel.setError(OnDeviceHindiStt.errorMessage(error))
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        amplitude = 0f
-                        isTranslating = false
-                        val finalText = results
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()
-                        liveTranscript = ""
-                        hindiPackMissing = false
-                        viewModel.onHindiVoiceInput(finalText, langCodeRef.value)
-                    }
-
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        liveTranscript = partialResults
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull().orEmpty()
-                    }
-
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
+        object : OnnxStt.Listener {
+            override fun onAmplitude(value: Float) {
+                amplitude = ((value + 60f) / 60f).coerceIn(0f, 1f)
             }
+
+            override fun onResult(text: String) {
+                amplitude = 0f
+                isTranslating = false
+                viewModel.onHindiVoiceInput(text, langCodeRef.value)
+            }
+
+            override fun onListeningEnd() {
+                isTranslating = true
+            }
+
+            override fun onError(message: String) {
+                amplitude = 0f
+                isTranslating = false
+                viewModel.setError(message)
+            }
+        }
+    }
+
+    fun startModelDownload() {
+        voiceModelState = VoiceModelState.Downloading
+        OnnxStt.downloadModel(
+            context,
+            onProgress = { downloadPercent = it },
+            onSuccess = {
+                downloadPercent = null
+                voiceModelState = VoiceModelState.Ready
+                voiceStatusAcked = true
+                OnnxStt.prewarm(context) { message -> viewModel.setError(message) }
+            },
+            onError = { message ->
+                downloadPercent = null
+                voiceModelState = VoiceModelState.Error
+                viewModel.setError(message)
+            }
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        if (OnnxStt.isModelInstalled(context)) {
+            OnnxStt.prewarm(context) { message -> viewModel.setError(message) }
+            voiceModelState = VoiceModelState.Ready
+            voiceStatusAcked = true
+        } else {
+            voiceModelState = VoiceModelState.Unavailable
         }
     }
 
     fun startListening() {
         stopAllAudio()
-        hindiPackMissing = false
-        val activeRecognizer = recognizer
-        if (activeRecognizer == null ||
-            !OnDeviceHindiStt.isOnDeviceRecognitionAvailable(context)
-        ) {
-            viewModel.setError(OnDeviceHindiStt.unavailableMessage())
-            return
-        }
-        try {
-            liveTranscript = ""
-            amplitude = 0f
-            viewModel.startRecording()
-            activeRecognizer.startListening(OnDeviceHindiStt.recognitionIntent())
-        } catch (e: Exception) {
-            viewModel.stopRecording()
-            Log.e("LiveTranslator", "on-device startListening failed: ${e.message}")
-            viewModel.setError("Voice input failed. Try again, or type the Hindi text below.")
-        }
-    }
-
-    fun openVoiceInputSettings() {
-        try {
-            context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
-        } catch (e: Exception) {
-            Log.e("LiveTranslator", "voice settings unavailable: ${e.message}")
-            viewModel.setError(
-                "Open system Settings → System → Languages → Voice input to install Hindi, " +
-                    "or type the Hindi text below."
-            )
-        }
-    }
-
-    fun markVoicePackReady() {
-        prefs.setVoicePackReady(true)
-        voiceModelState = VoiceModelState.Ready
-    }
-
-    fun fireDownloadFlow() {
-        Log.i("VoicePack", "Hindi pack not confirmed installed -> triggering system download")
-        val downloader = recognizer
-        if (downloader == null) {
-            voiceModelState = VoiceModelState.Unavailable
-            return
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            voiceModelState = VoiceModelState.Downloading
-            val ok = OnDeviceHindiStt.requestModelDownload(
-                context,
-                downloader,
-                onProgress = {},
-                onScheduled = {},
-                onSuccess = {},
-                onError = { voiceModelState = VoiceModelState.Error }
-            )
-            if (ok && voiceModelState == VoiceModelState.Downloading) {
-                markVoicePackReady()
-            }
-            return
-        }
-        voiceModelState = VoiceModelState.Downloading
-        OnDeviceHindiStt.requestModelDownload(
-            context,
-            downloader,
-            onProgress = { downloadPercent = it.takeIf { p -> p in 0..100 } },
-            onScheduled = { downloadPercent = null },
-            onSuccess = { markVoicePackReady() },
-            onError = { voiceModelState = VoiceModelState.Error }
-        )
-    }
-
-    fun startVoiceSetup() {
-        voiceStatusAcked = false
-        downloadPercent = null
-        voiceModelState = VoiceModelState.Checking
-        if (!OnDeviceHindiStt.apiAvailable() ||
-            !OnDeviceHindiStt.isOnDeviceRecognitionAvailable(context)
-        ) {
-            voiceModelState = VoiceModelState.Unavailable
-            return
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            markVoicePackReady()
-            return
-        }
-        val checker = recognizer
-        if (checker == null) {
-            voiceModelState = VoiceModelState.Unavailable
-            return
-        }
-        OnDeviceHindiStt.checkHindiPack(context, checker) { packState ->
-            when (packState) {
-                OnDeviceHindiStt.HindiPackState.INSTALLED -> markVoicePackReady()
-                else -> fireDownloadFlow()
-            }
-        }
-    }
-
-    fun retryVoiceSetup() {
-        startVoiceSetup()
-    }
-
-    fun requestHindiPack() {
-        val downloader = recognizer
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && downloader != null) {
-            packDownloading = true
-            val triggered = OnDeviceHindiStt.requestModelDownload(
-                context,
-                downloader,
-                onProgress = {},
-                onScheduled = {
-                    packDownloading = false
-                    viewModel.setError(
-                        "Hindi voice download scheduled — it will finish in the background. " +
-                            "You can type meanwhile."
-                    )
-                },
-                onSuccess = {
-                    packDownloading = false
-                    hindiPackMissing = false
-                    viewModel.clearError()
-                    prefs.setVoicePackReady(true)
-                    voiceModelState = VoiceModelState.Ready
-                },
-                onError = {
-                    packDownloading = false
-                    viewModel.setError(
-                        "Hindi voice download failed. Check your connection and retry, " +
-                            "or type the Hindi text below."
-                    )
-                }
-            )
-            if (!triggered) {
-                packDownloading = false
-                openVoiceInputSettings()
-            }
-        } else {
-            openVoiceInputSettings()
-        }
+        OnnxStt.start(context, recognizer)
+        liveTranscript = ""
+        amplitude = 0f
+        viewModel.startRecording()
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -310,12 +163,8 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
     fun onMicTap() {
         if (voiceModelState != VoiceModelState.Ready && !uiState.isRecording) return
         if (uiState.isRecording) {
-            try {
-                recognizer?.stopListening()
-            } catch (e: Exception) {
-                viewModel.stopRecording()
-                Log.e("LiveTranslator", "stopListening failed: ${e.message}")
-            }
+            OnnxStt.stopListening()
+            amplitude = 0f
             return
         }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -380,30 +229,10 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!voiceAutoCheckFired) {
-            voiceAutoCheckFired = true
-            startVoiceSetup()
-        }
-    }
-
-    LaunchedEffect(voiceModelState) {
-        if (voiceModelState == VoiceModelState.Ready) {
-            delay(2500)
-            voiceStatusAcked = true
-        } else {
-            voiceStatusAcked = false
-        }
-    }
-
     DisposableEffect(Unit) {
         onDispose {
-            try {
-                recognizer?.cancel()
-                recognizer?.destroy()
-            } catch (e: Exception) {
-                Log.e("LiveTranslator", "recognizer cleanup failed: ${e.message}")
-            }
+            OnnxStt.cancel()
+            OnnxStt.destroy()
             tts.shutdown()
             currentMediaPlayer?.release()
         }
@@ -432,8 +261,6 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
         isRecording -> "Listening… speak in Hindi"
         isTranslating -> "Translating…"
         isPlaying -> "Speaking…"
-        packDownloading -> "Downloading Hindi voice pack…"
-        voiceModelState == VoiceModelState.Downloading -> "Getting voice feature ready…"
         voiceModelState == VoiceModelState.Unavailable -> "Voice input isn't available on this device"
         result != null -> "Tap the mic to translate again"
         else -> "Tap the mic and speak in Hindi"
@@ -649,59 +476,24 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        when (voiceModelState) {
-                            VoiceModelState.Checking -> {
-                                Text(
-                                    "Checking voice feature…",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            VoiceModelState.Downloading -> {
-                                Text(
-                                    if (downloadPercent != null) {
-                                        "Downloading Voice Feature ${downloadPercent}%"
-                                    } else {
-                                        "Downloading Voice Feature…"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (downloadPercent != null) {
-                                    LinearProgressIndicator(
-                                        progress = { downloadPercent!! / 100f },
-                                        modifier = Modifier.width(200.dp)
-                                    )
-                                } else {
-                                    LinearProgressIndicator(modifier = Modifier.width(200.dp))
-                                }
-                            }
-                            VoiceModelState.Ready -> {
-                                Text(
-                                    "Ready",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = PalashGreen
-                                )
-                            }
-                            VoiceModelState.Unavailable -> {
-                                Text(
-                                    if (!OnDeviceHindiStt.apiAvailable()) {
-                                        "Voice input needs Android 12 or newer"
-                                    } else {
-                                        "Voice input isn't supported on this device"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            VoiceModelState.Error -> {
-                                TextButton(onClick = { retryVoiceSetup() }) {
-                                    Text("Download Voice Feature")
-                                }
+                        Text(
+                            text = when (voiceModelState) {
+                                VoiceModelState.Checking -> "Checking offline voice model…"
+                                VoiceModelState.Downloading -> downloadPercent?.let { "Downloading… $it%" }
+                                    ?: "Downloading offline voice model…"
+                                VoiceModelState.Ready -> "Ready"
+                                VoiceModelState.Unavailable -> "Offline voice model not installed"
+                                VoiceModelState.Error -> "Model download failed"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        if (voiceModelState == VoiceModelState.Unavailable || voiceModelState == VoiceModelState.Error) {
+                            TextButton(onClick = { startModelDownload() }) {
+                                Text(if (voiceModelState == VoiceModelState.Error) "Retry download" else "Download model")
                             }
                         }
                     }
@@ -710,9 +502,6 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
             }
         }
 
-        // Fixed bottom zone: pinned above the nav bar / keyboard. It is never
-        // inside a weighted container, so its height (and the text field's
-        // height) is fixed and never gets squeezed by the IME inset.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -732,31 +521,6 @@ fun LiveTranslatorScreen(targetLanguage: String, dictionaryDao: FLNDictionaryDao
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            }
-
-            AnimatedVisibility(
-                visible = hindiPackMissing && !isRecording,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (packDownloading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        TextButton(onClick = { requestHindiPack() }) {
-                            Text(
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    "Download Hindi voice pack"
-                                } else {
-                                    "Open voice settings to install Hindi"
-                                }
-                            )
-                        }
-                    }
                 }
             }
 

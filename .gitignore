@@ -4,3 +4,4 @@
 /app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/
 gradle-8.7/
 .kotlin/
+*.onnx
